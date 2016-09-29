@@ -1,4 +1,4 @@
-package com.sam_chordas.android.stockhawk.service;
+package com.sam_chordas.android.stockhawk.data.api.model;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonDeserializationContext;
@@ -10,7 +10,7 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 
-public class QuoteResponseDeserializer implements JsonDeserializer<List<QuoteResponse>>{
+public class QuoteListDeserializer implements JsonDeserializer<List<QuoteResponse>>{
     @Override
     public List<QuoteResponse> deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
         List<QuoteResponse> quotes = new ArrayList<>();

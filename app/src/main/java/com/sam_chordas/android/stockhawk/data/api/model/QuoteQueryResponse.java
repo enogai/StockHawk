@@ -1,4 +1,4 @@
-package com.sam_chordas.android.stockhawk.service;
+package com.sam_chordas.android.stockhawk.data.api.model;
 
 import com.google.gson.annotations.SerializedName;
 
