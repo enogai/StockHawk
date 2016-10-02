@@ -26,6 +26,8 @@ public class StocksApplication extends Application{
                 .appModule(new AppModule(this, YAHOO_API_BASE_URL))
                 .build();
 
+
+
     }
 
     public AppComponent getAppComponent() {

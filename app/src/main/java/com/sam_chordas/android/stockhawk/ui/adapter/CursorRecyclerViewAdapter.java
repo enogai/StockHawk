@@ -1,4 +1,4 @@
-package com.sam_chordas.android.stockhawk.rest;
+package com.sam_chordas.android.stockhawk.ui.adapter;
 
 import android.content.Context;
 import android.database.Cursor;

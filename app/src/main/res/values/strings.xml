@@ -9,5 +9,7 @@
   <string name="content_test">Search for a Stock Symbol</string>
   <string name="input_hint">FB</string>
   <string name="input_prefill"></string>
-  <string name="network_toast">Uh-oh! This app requires an internet connection</string>
+  <string name="no_connection">You are offline. Check your internet settings and retry.</string>
+  <string name="retry" >Retry</string>
+  <string name="no_data">Start tracking your favorite stocks by tapping on the plus button.</string>
 </resources>

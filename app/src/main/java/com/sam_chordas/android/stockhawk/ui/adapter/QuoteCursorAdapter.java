@@ -1,4 +1,4 @@
-package com.sam_chordas.android.stockhawk.rest;
+package com.sam_chordas.android.stockhawk.ui.adapter;
 
 import android.content.Context;
 import android.database.Cursor;
@@ -28,11 +28,20 @@ public class QuoteCursorAdapter extends CursorRecyclerViewAdapter<QuoteCursorAda
 
     private static Context mContext;
     private static Typeface robotoLight;
-    private boolean isPercent;
+    private boolean showPercent;
+
+    public QuoteCursorAdapter(Context context, Cursor cursor, boolean showPercent) {
+        super(context, cursor);
+        this.mContext = context;
+        this.showPercent = showPercent;
+    }
 
     public QuoteCursorAdapter(Context context, Cursor cursor) {
-        super(context, cursor);
-        mContext = context;
+        this(context, cursor, true);
+    }
+
+    public void setShowPercent(boolean showPercent){
+        this.showPercent = showPercent;
     }
 
     @Override
@@ -66,7 +75,7 @@ public class QuoteCursorAdapter extends CursorRecyclerViewAdapter<QuoteCursorAda
                         mContext.getResources().getDrawable(R.drawable.percent_change_pill_red));
             }
         }
-        if (Utils.showPercent) {
+        if (showPercent) {
             viewHolder.change.setText(cursor.getString(cursor.getColumnIndex("percent_change")));
         } else {
             viewHolder.change.setText(cursor.getString(cursor.getColumnIndex("change")));

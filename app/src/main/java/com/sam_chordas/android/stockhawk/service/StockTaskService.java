@@ -1,5 +1,6 @@
 package com.sam_chordas.android.stockhawk.service;
 
+import android.content.ContentProviderOperation;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.OperationApplicationException;
@@ -16,10 +17,11 @@ import com.sam_chordas.android.stockhawk.data.QuoteProvider;
 import com.sam_chordas.android.stockhawk.data.api.YahooApi;
 import com.sam_chordas.android.stockhawk.data.api.model.QuoteQueryResponse;
 import com.sam_chordas.android.stockhawk.data.api.model.QuoteResponse;
-import com.sam_chordas.android.stockhawk.rest.Utils;
 import com.sam_chordas.android.stockhawk.ui.StocksApplication;
+import com.sam_chordas.android.stockhawk.ui.Utils;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -33,10 +35,11 @@ import javax.inject.Inject;
  * and is used for the initialization and adding task as well.
  */
 public class StockTaskService extends GcmTaskService {
+    private String TAG = StockTaskService.class.getSimpleName();
+
     public static final List<String> DEFAULT_SYMBOLS
             = Arrays.asList(new String[]{"\"YHOO\"", "\"AAPL\"", "\"GOOG\"", "\"MSFT\""});
 
-    private String LOG_TAG = StockTaskService.class.getSimpleName();
     private Context mContext;
 
     @Inject
@@ -59,46 +62,57 @@ public class StockTaskService extends GcmTaskService {
             mContext = this;
         }
 
-        boolean isUpdate = false;
-        Set<String> symbols = new HashSet<>();
-
-        if (params.getTag().equals("init") || params.getTag().equals("periodic")) {
-            isUpdate = true;
-
-            Set<String> storedSymbols = getStoredSymbols();
-            symbols.addAll(storedSymbols);
-
-        } else if (params.getTag().equals("add")) {
-            // get symbol from params.getExtra and build query
-            String symbol = params.getExtras().getString("symbol");
-            if (!TextUtils.isEmpty(symbol)) {
-                symbols.add(String.format("\"%s\"", symbol));
-
-            }
-        }
-
         int result = GcmNetworkManager.RESULT_FAILURE;
 
-        if (symbols.isEmpty()) {
-            symbols.addAll(DEFAULT_SYMBOLS);
-        }
+        if(Utils.isConnected(mContext)) {
 
-        String query = getSymbolsQuery(symbols);
+            boolean isUpdate = false;
+            Set<String> symbols = new HashSet<>();
 
-        if (!TextUtils.isEmpty(query)) {
+            if (params.getTag().equals("periodic")) {
+                isUpdate = true;
 
-            try {
+                Set<String> storedSymbols = getStoredSymbols();
 
-                QuoteQueryResponse queryResponse = stocksApi.getQuoteList(query).execute().body();
+                symbols.addAll(storedSymbols);
 
-                result = GcmNetworkManager.RESULT_SUCCESS;
+            } else if (params.getTag().equals("add")) {
+                // get symbol from params.getExtra and build query
+                String symbol = params.getExtras().getString("symbol");
+                if (!TextUtils.isEmpty(symbol)) {
+                    symbols.add(String.format("\"%s\"", symbol));
 
-                updateQuotes(queryResponse.getQuotes(), isUpdate);
-
-            } catch (IOException e) {
-                Log.e(LOG_TAG, "Error fetching quotes", e);
-
+                }
             }
+
+            String query = getSymbolsQuery(symbols);
+
+            if (!TextUtils.isEmpty(query)) {
+
+                try {
+
+                    QuoteQueryResponse queryResponse = stocksApi.getQuoteList(query).execute().body();
+
+                    if(queryResponse!=null){
+                        ArrayList<ContentProviderOperation> ops = getQuoteListOps(queryResponse.getQuotes(), isUpdate);
+                        if(ops!=null && !ops.isEmpty()){
+                            mContext.getContentResolver()
+                                    .applyBatch(QuoteProvider.AUTHORITY, ops);
+
+                        }
+
+                    }
+
+                    result = GcmNetworkManager.RESULT_SUCCESS;
+
+                } catch (IOException e) {
+                    Log.e(TAG, "Error fetching quotes", e);
+
+                }catch (RemoteException | OperationApplicationException e) {
+                    Log.e(TAG, "Error updating quotes", e);
+                }
+            }
+
         }
 
         return result;
@@ -131,24 +145,51 @@ public class StockTaskService extends GcmTaskService {
     }
 
 
-    public void updateQuotes(List<QuoteResponse> quotes, boolean isUpdate){
-        try {
-            // update ISCURRENT to 0 (false) so new data is current
+    public ArrayList<ContentProviderOperation> getQuoteListOps(List<QuoteResponse> quotes, boolean isUpdate){
+        ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+
+        if(quotes!=null && !quotes.isEmpty()){
             if (isUpdate) {
                 ContentValues contentValues = new ContentValues();
                 contentValues.put(QuoteColumns.ISCURRENT, 0);
-                mContext.getContentResolver().update(QuoteProvider.Quotes.CONTENT_URI, contentValues,
-                        null, null);
+                ops.add(ContentProviderOperation
+                        .newUpdate(QuoteProvider.Quotes.CONTENT_URI)
+                        .withValues(contentValues)
+                        .build());
 
             }
 
-            mContext.getContentResolver()
-                    .applyBatch(QuoteProvider.AUTHORITY, Utils.quoteJsonToContentVals(quotes));
+            for (QuoteResponse quote : quotes) {
+                ContentProviderOperation op = getQuoteOp(quote);
+                if (op != null) {
+                    ops.add(op);
+                }
+            }
 
-
-        } catch (RemoteException | OperationApplicationException e) {
-            Log.e(LOG_TAG, "Error applying batch insert", e);
         }
+
+        return ops;
+    }
+
+    public ContentProviderOperation getQuoteOp(QuoteResponse quote) {
+        ContentProviderOperation op = null;
+
+        if (quote.isValid()) {
+            ContentProviderOperation.Builder builder = ContentProviderOperation.newInsert(
+                    QuoteProvider.Quotes.CONTENT_URI);
+
+            builder.withValue(QuoteColumns.SYMBOL, quote.getSymbol().trim().toLowerCase());
+            builder.withValue(QuoteColumns.BIDPRICE, truncateBidPrice(quote.getBid()));
+            builder.withValue(QuoteColumns.PERCENT_CHANGE, truncateChange(quote.getPercentChange(), true));
+            builder.withValue(QuoteColumns.CHANGE, truncateChange(quote.getChange(), false));
+            builder.withValue(QuoteColumns.ISCURRENT, 1);
+            builder.withValue(QuoteColumns.ISUP, quote.isUp() ? 1 : 0);
+
+            op = builder.build();
+
+        }
+
+        return op;
     }
 
     public String getSymbolsQuery(Set<String> symbols) {
@@ -162,5 +203,48 @@ public class StockTaskService extends GcmTaskService {
 
         return query;
     }
+
+
+
+    public String truncateBidPrice(String bidPrice) {
+        String formattedBidPrice = null;
+        try {
+            formattedBidPrice = String.format("%.2f", Float.parseFloat(bidPrice));
+
+        } catch (NumberFormatException ex) {
+            //
+        }
+
+        return formattedBidPrice;
+    }
+
+    public String truncateChange(String change, boolean isPercentChange) {
+        String formattedChange = null;
+
+        if (!TextUtils.isEmpty(change) && change.length() > 1) {
+            try {
+                String weight = change.substring(0, 1);
+                String ampersand = "";
+                if (isPercentChange) {
+                    ampersand = change.substring(change.length() - 1, change.length());
+                    change = change.substring(0, change.length() - 1);
+                }
+                change = change.substring(1, change.length());
+                double round = (double) Math.round(Double.parseDouble(change) * 100) / 100;
+                change = String.format("%.2f", round);
+                StringBuffer changeBuffer = new StringBuffer(change);
+                changeBuffer.insert(0, weight);
+                changeBuffer.append(ampersand);
+                formattedChange = changeBuffer.toString();
+
+            } catch (NumberFormatException ex) {
+                //
+            }
+
+        }
+
+        return formattedChange;
+    }
+
 
 }

@@ -2,10 +2,13 @@ package com.sam_chordas.android.stockhawk.dagger;
 
 
 import android.app.Application;
+import android.content.Context;
+import android.content.SharedPreferences;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.sam_chordas.android.stockhawk.data.AppPreferences;
 import com.sam_chordas.android.stockhawk.data.api.YahooApi;
 import com.sam_chordas.android.stockhawk.data.api.model.QuoteListDeserializer;
 import com.sam_chordas.android.stockhawk.data.api.model.QuoteResponse;
@@ -39,6 +42,14 @@ public class AppModule {
     @Singleton
     Application providesApplication() {
         return application;
+    }
+
+
+    @Provides
+    @Singleton
+    AppPreferences provideAppPreferences(Application application){
+        SharedPreferences prefs = application.getSharedPreferences("app_preferences", Context.MODE_PRIVATE);
+        return new AppPreferences(prefs);
     }
 
     @Provides
